@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Simulador Red PACS / DICOM + IA (Modelo OSI)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    body { background-color: #0f172a; color: #f8fafc; }
+    .osi-layer { transition: all 0.3s ease; }
+    .active-layer { border-color: #38bdf8; background-color: #1e293b; transform: scale(1.02); }
+  </style>
+</head>
+<body class="p-6">
+  <header class="mb-6 border-b border-slate-700 pb-4">
+    <h1 class="text-3xl font-bold text-sky-400">Simulador de Transmisión DICOM/PACS & IA</h1>
+    <p class="text-slate-400">Fundamentos de Redes Digitales - Análisis del Modelo OSI de 7 Capas</p>
+  </header>
+
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    
+    <!-- Columna 1: Visor de Imagen Médica -->
+    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col items-center">
+      <h2 class="text-xl font-semibold mb-3 text-sky-300">Visor PACS (Capa 7)</h2>
+      <div id="dicom-canvas" class="w-64 h-64 bg-black border border-slate-700 rounded flex items-center justify-center relative">
+        <span id="canvas-text" class="text-slate-500 text-sm">Vista de Corte CT [Axial]</span>
+        <div id="ai-overlay" class="absolute inset-0 border-2 border-emerald-500 rounded hidden flex items-center justify-center bg-emerald-500/10">
+          <span class="bg-emerald-600 text-white text-xs px-2 py-1 rounded">IA: Pulmón Detectado</span>
+        </div>
+      </div>
+      
+      <div class="mt-4 flex gap-2">
+        <button onclick="cambiarCorte()" class="bg-slate-800 hover:bg-slate-700 text-xs py-2 px-3 rounded">Cambiar Corte</button>
+        <button onclick="ejecutarIA()" class="bg-emerald-600 hover:bg-emerald-500 text-xs py-2 px-3 rounded font-bold">Identificar con IA</button>
+      </div>
+    </div>
+
+    <!-- Columna 2: Metadatos y Control de Red -->
+    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+      <h2 class="text-xl font-semibold mb-3 text-sky-300">Metadatos DICOM & Control</h2>
+      <div class="text-xs space-y-2 text-slate-300 bg-slate-950 p-3 rounded font-mono">
+        <p><strong>Modalidad:</strong> CT (Tomografía Computarizada)</p>
+        <p><strong>Región Anatómica:</strong> Tórax</p>
+        <p id="corte-info"><strong>Corte Actual:</strong> Axial #12 (Espesor: 1.25mm)</p>
+        <p><strong>Sintaxis Transferencia:</strong> Explicit VR Little Endian</p>
+        <p><strong>AET Origen/Destino:</strong> CT_SCANNER_01 -> PACS_SERVER</p>
+      </div>
+
+      <button onclick="simularEnvioOSI()" class="w-full mt-6 bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded text-sm transition">
+        Simular Transmisión DICOM C-STORE (7 Capas OSI)
+      </button>
+    </div>
+
+    <!-- Columna 3: Modelo OSI (7 Capas) -->
+    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+      <h2 class="text-xl font-semibold mb-3 text-sky-300">Flujo de Red - Modelo OSI</h2>
+      <div id="osi-layers" class="space-y-2 text-xs">
+        <div id="layer-7" class="osi-layer p-2 rounded border border-slate-700"><strong>7. Aplicación:</strong> DICOM C-STORE Request</div>
+        <div id="layer-6" class="osi-layer p-2 rounded border border-slate-700"><strong>6. Presentación:</strong> Transfer Syntax / Formato DICOM VR</div>
+        <div id="layer-5" class="osi-layer p-2 rounded border border-slate-700"><strong>5. Sesión:</strong> DICOM Association (AET CT_SCANNER_01)</div>
+        <div id="layer-4" class="osi-layer p-2 rounded border border-slate-700"><strong>4. Transporte:</strong> TCP Puerto 104 (ACK/Seq)</div>
+        <div id="layer-3" class="osi-layer p-2 rounded border border-slate-700"><strong>3. Red:</strong> IP Origen: 192.168.10.50 -> Destino: 10.20.4.100</div>
+        <div id="layer-2" class="osi-layer p-2 rounded border border-slate-700"><strong>2. Enlace de Datos:</strong> Trama Ethernet II (MAC: 00:1A:2B:3C:4D:5E)</div>
+        <div id="layer-1" class="osi-layer p-2 rounded border border-slate-700"><strong>1. Física:</strong> Impulsos ópticos en Fibra 10GBASE-LR</div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    let corteActual = 12;
+
+    function cambiarCorte() {
+      corteActual = (corteActual % 30) + 5;
+      document.getElementById('corte-info').innerHTML = `<strong>Corte Actual:</strong> Axial #${corteActual} (Espesor: 1.25mm)`;
+      document.getElementById('canvas-text').innerText = `Corte CT Axial #${corteActual}`;
+    }
+
+    function ejecutarIA() {
+      const overlay = document.getElementById('ai-overlay');
+      overlay.classList.toggle('hidden');
+    }
+
+    function simularEnvioOSI() {
+      const layers = [7, 6, 5, 4, 3, 2, 1];
+      layers.forEach((l) => document.getElementById(`layer-${l}`).classList.remove('active-layer'));
+
+      layers.forEach((layerNum, index) => {
+        setTimeout(() => {
+          if (index > 0) {
+            document.getElementById(`layer-${layers[index - 1]}`).classList.remove('active-layer');
+          }
+          document.getElementById(`layer-${layerNum}`).classList.add('active-layer');
+        }, index * 600);
+      });
+    }
+  </script>
+</body>
+</html>

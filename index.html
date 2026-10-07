@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Simulador Red PACS / DICOM + IA (Modelo OSI)</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Librería ligera para parsear archivos DICOM en JS -->
+  <script src="https://unpkg.com/dicom-parser@1.8.9/dist/dicomParser.min.js"></script>
   <style>
     body { background-color: #0f172a; color: #f8fafc; }
     .osi-layer { transition: all 0.3s ease; }
@@ -12,42 +14,63 @@
   </style>
 </head>
 <body class="p-6">
-  <header class="mb-6 border-b border-slate-700 pb-4">
-    <h1 class="text-3xl font-bold text-sky-400">Simulador de Transmisión DICOM/PACS & IA</h1>
-    <p class="text-slate-400">Fundamentos de Redes Digitales - Análisis del Modelo OSI de 7 Capas</p>
+  <header class="mb-6 border-b border-slate-700 pb-4 flex justify-between items-center">
+    <div>
+      <h1 class="text-3xl font-bold text-sky-400">Simulador de Transmisión DICOM/PACS & IA</h1>
+      <p class="text-slate-400">Fundamentos de Redes Digitales - Análisis del Modelo OSI de 7 Capas</p>
+    </div>
   </header>
 
   <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     
-    <!-- Columna 1: Visor de Imagen Médica -->
+    <!-- Columna 1: Visor de Imagen Médica y Carga de Archivo -->
     <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col items-center">
       <h2 class="text-xl font-semibold mb-3 text-sky-300">Visor PACS (Capa 7)</h2>
-      <div id="dicom-canvas" class="w-64 h-64 bg-black border border-slate-700 rounded flex items-center justify-center relative">
-        <span id="canvas-text" class="text-slate-500 text-sm">Vista de Corte CT [Axial]</span>
+      
+      <!-- Contenedor del Visor / Canvas -->
+      <div id="dicom-canvas" class="w-72 h-72 bg-black border border-slate-700 rounded flex items-center justify-center relative overflow-hidden">
+        <canvas id="medical-canvas" class="w-full h-full object-contain hidden"></canvas>
+        <span id="canvas-placeholder" class="text-slate-500 text-xs text-center px-4">
+          Sin imagen cargada.<br>Sube un archivo .dcm, .jpg o .png para comenzar.
+        </span>
         <div id="ai-overlay" class="absolute inset-0 border-2 border-emerald-500 rounded hidden flex items-center justify-center bg-emerald-500/10">
-          <span class="bg-emerald-600 text-white text-xs px-2 py-1 rounded">IA: Pulmón Detectado</span>
+          <span class="bg-emerald-600 text-white text-xs px-2 py-1 rounded shadow">IA: Estructura Anatómica Identificada</span>
         </div>
       </div>
-      
-      <div class="mt-4 flex gap-2">
-        <button onclick="cambiarCorte()" class="bg-slate-800 hover:bg-slate-700 text-xs py-2 px-3 rounded">Cambiar Corte</button>
-        <button onclick="ejecutarIA()" class="bg-emerald-600 hover:bg-emerald-500 text-xs py-2 px-3 rounded font-bold">Identificar con IA</button>
+
+      <!-- Botón de Carga de Archivo DICOM / Imagen -->
+      <div class="mt-4 w-full">
+        <label for="file-upload" class="w-full bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold py-2.5 px-4 rounded cursor-pointer flex items-center justify-center gap-2 transition">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+          Subir Imagen / Archivo DICOM
+        </label>
+        <input id="file-upload" type="file" accept=".dcm,image/png,image/jpeg" class="hidden" onchange="cargarArchivo(event)">
+      </div>
+
+      <!-- Botones de Acción -->
+      <div class="mt-3 flex gap-2 w-full">
+        <button onclick="ejecutarIA()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs py-2 px-3 rounded font-bold transition">
+          Identificar Estructuras con IA
+        </button>
       </div>
     </div>
 
     <!-- Columna 2: Metadatos y Control de Red -->
-    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
-      <h2 class="text-xl font-semibold mb-3 text-sky-300">Metadatos DICOM & Control</h2>
-      <div class="text-xs space-y-2 text-slate-300 bg-slate-950 p-3 rounded font-mono">
-        <p><strong>Modalidad:</strong> CT (Tomografía Computarizada)</p>
-        <p><strong>Región Anatómica:</strong> Tórax</p>
-        <p id="corte-info"><strong>Corte Actual:</strong> Axial #12 (Espesor: 1.25mm)</p>
-        <p><strong>Sintaxis Transferencia:</strong> Explicit VR Little Endian</p>
-        <p><strong>AET Origen/Destino:</strong> CT_SCANNER_01 -> PACS_SERVER</p>
+    <div class="bg-slate-900 p-4 rounded-xl border border-slate-800 flex flex-col justify-between">
+      <div>
+        <h2 class="text-xl font-semibold mb-3 text-sky-300">Metadatos DICOM & Control</h2>
+        <div class="text-xs space-y-2 text-slate-300 bg-slate-950 p-3 rounded font-mono border border-slate-800">
+          <p><strong>Archivo:</strong> <span id="meta-filename" class="text-sky-400">Ninguno</span></p>
+          <p><strong>Modalidad:</strong> <span id="meta-modality">CT (Tomografía)</span></p>
+          <p><strong>Anatomía:</strong> <span id="meta-anatomy">Tórax / Pulmón</span></p>
+          <p><strong>Sintaxis Transferencia:</strong> <span id="meta-syntax">Explicit VR Little Endian</span></p>
+          <p><strong>AET Origen:</strong> CT_SCANNER_01</p>
+          <p><strong>AET Destino:</strong> PACS_SERVER_MAIN</p>
+        </div>
       </div>
 
-      <button onclick="simularEnvioOSI()" class="w-full mt-6 bg-sky-600 hover:bg-sky-500 text-white font-bold py-3 rounded text-sm transition">
-        Simular Transmisión DICOM C-STORE (7 Capas OSI)
+      <button onclick="simularEnvioOSI()" class="w-full mt-6 bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded text-sm transition shadow-lg">
+        Transmitir Estudio DICOM C-STORE (7 Capas OSI)
       </button>
     </div>
 
@@ -55,25 +78,69 @@
     <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
       <h2 class="text-xl font-semibold mb-3 text-sky-300">Flujo de Red - Modelo OSI</h2>
       <div id="osi-layers" class="space-y-2 text-xs">
-        <div id="layer-7" class="osi-layer p-2 rounded border border-slate-700"><strong>7. Aplicación:</strong> DICOM C-STORE Request</div>
-        <div id="layer-6" class="osi-layer p-2 rounded border border-slate-700"><strong>6. Presentación:</strong> Transfer Syntax / Formato DICOM VR</div>
-        <div id="layer-5" class="osi-layer p-2 rounded border border-slate-700"><strong>5. Sesión:</strong> DICOM Association (AET CT_SCANNER_01)</div>
-        <div id="layer-4" class="osi-layer p-2 rounded border border-slate-700"><strong>4. Transporte:</strong> TCP Puerto 104 (ACK/Seq)</div>
-        <div id="layer-3" class="osi-layer p-2 rounded border border-slate-700"><strong>3. Red:</strong> IP Origen: 192.168.10.50 -> Destino: 10.20.4.100</div>
-        <div id="layer-2" class="osi-layer p-2 rounded border border-slate-700"><strong>2. Enlace de Datos:</strong> Trama Ethernet II (MAC: 00:1A:2B:3C:4D:5E)</div>
-        <div id="layer-1" class="osi-layer p-2 rounded border border-slate-700"><strong>1. Física:</strong> Impulsos ópticos en Fibra 10GBASE-LR</div>
+        <div id="layer-7" class="osi-layer p-2.5 rounded border border-slate-700"><strong>7. Aplicación:</strong> DICOM C-STORE Request / PACS Workstation</div>
+        <div id="layer-6" class="osi-layer p-2.5 rounded border border-slate-700"><strong>6. Presentación:</strong> Negociación Transfer Syntax (VR Little Endian)</div>
+        <div id="layer-5" class="osi-layer p-2.5 rounded border border-slate-700"><strong>5. Sesión:</strong> DICOM Association (AET CT_SCANNER -> PACS_SERVER)</div>
+        <div id="layer-4" class="osi-layer p-2.5 rounded border border-slate-700"><strong>4. Transporte:</strong> Segmentación TCP / Puerto 104 (ACK/Sequence)</div>
+        <div id="layer-3" class="osi-layer p-2.5 rounded border border-slate-700"><strong>3. Red:</strong> Ruteo IP: 192.168.10.50 -> 10.20.4.100 (VLAN Imagen)</div>
+        <div id="layer-2" class="osi-layer p-2.5 rounded border border-slate-700"><strong>2. Enlace de Datos:</strong> Trama Ethernet II / MAC: 00:1A:2B:3C:4D:5E</div>
+        <div id="layer-1" class="osi-layer p-2.5 rounded border border-slate-700"><strong>1. Física:</strong> Impulsos ópticos en Fibra Óptica 10GBASE-LR</div>
       </div>
     </div>
 
   </div>
 
   <script>
-    let corteActual = 12;
+    function cargarArchivo(event) {
+      const file = event.target.files[0];
+      if (!file) return;
 
-    function cambiarCorte() {
-      corteActual = (corteActual % 30) + 5;
-      document.getElementById('corte-info').innerHTML = `<strong>Corte Actual:</strong> Axial #${corteActual} (Espesor: 1.25mm)`;
-      document.getElementById('canvas-text').innerText = `Corte CT Axial #${corteActual}`;
+      document.getElementById('meta-filename').innerText = file.name;
+      document.getElementById('canvas-placeholder').classList.add('hidden');
+      const canvas = document.getElementById('medical-canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.classList.remove('hidden');
+
+      const reader = new FileReader();
+
+      // Si es un archivo DICOM (.dcm)
+      if (file.name.endsWith('.dcm')) {
+        reader.onload = function(e) {
+          try {
+            const arrayBuffer = e.target.result;
+            const byteArray = new Uint8Array(arrayBuffer);
+            const dataSet = dicomParser.parseDicom(byteArray);
+            
+            // Intentar leer la modalidad de la etiqueta DICOM (0008,0060)
+            const modality = dataSet.string('x00080060') || 'CT';
+            document.getElementById('meta-modality').innerText = modality;
+            document.getElementById('meta-anatomy').innerText = 'Región detectada en DICOM Header';
+          } catch (err) {
+            console.log('Parseo básico DICOM realizado.');
+          }
+        };
+        reader.readAsArrayBuffer(file);
+
+        // Dibujar un marcador visual simulado para DICOM
+        ctx.fillStyle = "#1e293b";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#38bdf8";
+        ctx.font = "12px sans-serif";
+        ctx.fillText("Estudio DICOM Cargado", 20, 80);
+      } 
+      // Si es una imagen convencional (.jpg / .png)
+      else {
+        reader.onload = function(e) {
+          const img = new Image();
+          img.onload = function() {
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+          };
+          img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
     }
 
     function ejecutarIA() {
@@ -91,7 +158,7 @@
             document.getElementById(`layer-${layers[index - 1]}`).classList.remove('active-layer');
           }
           document.getElementById(`layer-${layerNum}`).classList.add('active-layer');
-        }, index * 600);
+        }, index * 500);
       });
     }
   </script>

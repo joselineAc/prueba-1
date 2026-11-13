@@ -66,6 +66,8 @@ input.q{flex:1;min-width:200px;font:inherit;padding:9px 12px;border:1px solid va
 #body{width:100px;height:230px}.sil{fill:var(--line)}.hl{fill:var(--acc);opacity:.9}.pm{stroke:var(--acc);stroke-width:2;stroke-dasharray:4 3}
 .bars{flex:1;min-width:210px;font-size:13px}.bars b{display:block;margin-top:8px}.bar{display:grid;grid-template-columns:100px 1fr 40px;gap:8px;align-items:center;margin:4px 0}.bar span{color:var(--mute)}.bar i{height:8px;border-radius:4px;background:var(--acc);display:block}
 .cv{flex:0 1 auto}.cv canvas{width:100%;max-width:320px;height:auto;background:var(--film);border-radius:10px;touch-action:none;cursor:grab;display:block}.cv small{display:block;text-align:center;color:var(--mute);margin-top:4px}
+.cvw{position:relative}.lbls{position:absolute;inset:0;pointer-events:none;overflow:hidden}.lbl{position:absolute;transform:translate(-50%,-50%);font-size:11px;background:rgba(0,0,0,.68);color:#fff;padding:1px 7px;border-radius:99px;white-space:nowrap}
+.legend{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.legend button{display:inline-flex;gap:6px;align-items:center;border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:99px;padding:3px 10px;font:12.5px "Instrument Sans",sans-serif;cursor:pointer}.legend i{width:10px;height:10px;border-radius:50%;display:block}.legend button[aria-pressed=true]{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 16%,var(--panel))}.chk{font-size:13px;color:var(--mute);display:inline-flex;gap:5px;align-items:center}
 @media (prefers-reduced-motion:reduce){.layer{transition:none}}
 </style>
 </head>
@@ -88,11 +90,13 @@ input.q{flex:1;min-width:200px;font:inherit;padding:9px 12px;border:1px solid va
 <section class="card" aria-labelledby="h-ai"><h2 id="h-ai">2. Análisis con IA</h2>
 <div class="ans" id="ia" aria-live="polite">Sube una imagen para analizarla.</div>
 <div class="viz" id="viz" hidden>
-<div class="cv" style="width:210px"><canvas id="cvBody" width="420" height="600" aria-label="Cuerpo completo en 3D, el punto amarillo marca el órgano"></canvas><small>Cuerpo completo</small></div>
-<div class="cv" style="width:320px"><canvas id="cvOrg" width="640" height="640" aria-label="Órgano en 3D, arrastra para girar y toca una parte"></canvas><small id="orgName"></small><div class="row"><button class="btn pri" id="enter" type="button">Entrar al órgano</button></div><p class="note" id="partInfo" style="margin-top:6px"></p></div>
+<div class="cv" style="width:210px"><div class="cvw"><canvas id="cvBody" width="420" height="600" aria-label="Cuerpo completo en 3D: el plano muestra de dónde salió tu corte"></canvas></div><small>Cuerpo completo: el plano marca tu corte</small></div>
+<div class="cv" style="width:340px"><div class="cvw"><canvas id="cvOrg" width="680" height="680" aria-label="Órgano en 3D, arrastra para girar"></canvas><div class="lbls" id="lbls"></div></div><small id="orgName"></small>
+<div class="row"><button class="btn pri" id="enter" type="button">Entrar al órgano</button><label class="chk"><input type="checkbox" id="showL" checked> Nombres</label></div>
+<div class="legend" id="legend"></div><p class="note" id="partInfo" style="margin-top:6px"></p></div>
 <div class="bars"><div id="bars"></div>
-<div class="row" id="osel" role="group" aria-label="Elegir órgano"><span class="note" style="margin:0">Órgano:</span><button class="btn" type="button" data-o="corazon">Corazón</button><button class="btn" type="button" data-o="pulmones">Pulmones</button><button class="btn" type="button" data-o="cerebro">Cerebro</button></div>
-<div class="row" id="psel" role="group" aria-label="Corregir el plano"><span class="note" style="margin:0">Corte:</span><button class="btn" type="button" data-p="axial">Axial</button><button class="btn" type="button" data-p="sagital">Sagital</button><button class="btn" type="button" data-p="coronal">Coronal</button></div>
+<div class="row" id="osel" role="group" aria-label="Elegir órgano"><span class="note" style="margin:0">Órgano:</span></div>
+<div class="row" id="psel" role="group" aria-label="Corregir el plano"><span class="note" style="margin:0">Corte:</span><button class="btn" type="button" data-p="axial">Axial</button><button class="btn" type="button" data-p="sagital">Sagital</button><button class="btn" type="button" data-p="coronal">Coronal</button><button class="btn" type="button" data-p="proy">Radiografía</button></div>
 <p class="note" id="vnote"></p></div></div>
 <div class="row"><button class="btn pri" id="ana" type="button" disabled>Identificar estructura y corte</button></div>
 <p class="note">IA que corre en tu propio navegador (modelo CLIP, sin claves ni servidores). La primera vez descarga el modelo y luego queda en caché. Es una estimación educativa, no un diagnóstico.</p></section>
@@ -167,7 +171,7 @@ function renderFrame(img,k){const r=img.raw,n=r.rows*r.cols,A=r.ba===16?(r.pr?ne
  x.putImageData(d,0,0);return c.toDataURL('image/jpeg',.9)}
 function readDicom(buf,name,size){const ds=dicomParser.parseDicom(new Uint8Array(buf)),s=t=>(ds.string(t)||'').trim();
  const ts=s('x00020010')||'1.2.840.10008.1.2',rows=ds.uint16('x00280010'),cols=ds.uint16('x00280011'),ba=ds.uint16('x00280100'),nf=parseInt(s('x00280008'))||1;
- const img={id:'user',name,mod:s('x00080060')||'—',fmt:'DICOM',w:cols,h:rows,bits:ds.uint16('x00280101')||ba,frames:nf,bytes:size,info:{sop:s('x00080016'),ts,photo:s('x00280004'),pn:s('x00100010'),pid:s('x00100020'),orient:!!ds.elements.x00200037,virtual:false}};
+ const img={id:'user',name,mod:s('x00080060')||'—',fmt:'DICOM',w:cols,h:rows,bits:ds.uint16('x00280101')||ba,frames:nf,bytes:size,info:{sop:s('x00080016'),ts,photo:s('x00280004'),pn:s('x00100010'),pid:s('x00100020'),orient:!!ds.elements.x00200037,part:s('x00180015'),desc:s('x0008103e')+' '+s('x00081030'),iop:s('x00200037'),virtual:false}};
  const e=ds.elements.x7fe00010;
  if(e&&!comp(ts)&&(ds.uint16('x00280002')||1)===1&&(ba===16||ba===8)){img.raw={buf:buf.slice(e.dataOffset,e.dataOffset+e.length),rows,cols,ba,pr:ds.uint16('x00280103')||0};img.src=renderFrame(img,Math.floor(nf/2))}
  return img}
@@ -184,7 +188,7 @@ $('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;$('#note').
    const im=await new Promise((ok,no)=>{const i=new Image();i.onload=()=>ok(i);i.onerror=no;i.src=src});const j=/jpe?g/i.test(f.type);
    img={id:'user',name:f.name,mod:'—',fmt:j?'JPG':'PNG',w:im.width,h:im.height,bits:8,frames:1,bytes:f.size,src,info:vinfo(j)}}
   $('#note').textContent='Archivo cargado: '+f.name;show(img,true)}catch(err){$('#note').textContent='No pude leer el archivo: '+err.message}};
-$('#fr').oninput=()=>{const k=+$('#fr').value-1;cur.src=renderFrame(cur,k);$('#pic').src=cur.src;$('#frn').textContent=(k+1)+' / '+cur.frames;updateViz()};
+$('#fr').oninput=()=>{const k=+$('#fr').value-1;cur.src=renderFrame(cur,k);$('#pic').src=cur.src;$('#frn').textContent=(k+1)+' / '+cur.frames;if(VZ){updateViz();$('#vnote').textContent='Cambiaste de corte: tu órgano y plano elegidos se conservan. Pulsa «Identificar estructura y corte» para analizar este corte de nuevo.'}};
 $('#prev').onclick=()=>{sel=Math.min(7,sel+1);drawStack();drawDetail()};
 $('#next').onclick=()=>{sel=Math.max(1,sel-1);drawStack();drawDetail()};
 $('#theme').onclick=()=>{const r=document.documentElement,d=matchMedia('(prefers-color-scheme:dark)').matches;const now=r.dataset.theme||(d?'dark':'light');r.dataset.theme=now==='dark'?'light':'dark'};
@@ -194,53 +198,88 @@ for(let k=0;k<d.length;k+=4){const v=d[k]*.3+d[k+1]*.59+d[k+2]*.11;g.push(v);mn=
 let x0=w,x1=0,y0=h,y1=0;g.forEach((v,k)=>{if((v-mn)/(mx-mn||1)>.15){const a=k%w,b=(k/w)|0;x0=Math.min(x0,a);x1=Math.max(x1,a);y0=Math.min(y0,b);y1=Math.max(y1,b)}});
 const A=[],B=[];for(let b=y0;b<=y1;b++)for(let a=x0;a<=x1;a++){A.push(g[b*w+a]);B.push(g[b*w+x1-(a-x0)])}
 const m=a=>a.reduce((s,v)=>s+v,0)/a.length,ma=m(A),mb=m(B);let n=0,da=0,db=0;A.forEach((v,k)=>{n+=(v-ma)*(B[k]-mb);da+=(v-ma)**2;db+=(B[k]-mb)**2});res(n/Math.sqrt(da*db||1))};i.src=src})}
-let VZ=null,SB=null,SO=null,SHOWN=null,ENTER=false,FL=[],FT=0,MK=null;
+let VZ=null,JJ=null,SB=null,SO=null,SL=null,SLsrc=null,SHOWN=null,ENTER=false,HL=null,FL=[],FT=0,MK=null,LB=[];
 const RM=matchMedia('(prefers-reduced-motion:reduce)').matches;
-const PLNAME={axial:'Axial',sagital:'Sagital',coronal:'Coronal',proy:'Proyección'},ORGN={corazon:'Corazón',pulmones:'Pulmones',cerebro:'Cerebro'},ORGL={'the heart':'corazon','the lungs':'pulmones','the brain':'cerebro'};
-const INFO={ao:['Aorta','arteria principal: lleva sangre oxigenada del ventrículo izquierdo a todo el cuerpo.'],ap:['Arteria pulmonar','lleva sangre pobre en oxígeno del ventrículo derecho a los pulmones.'],vc:['Venas cavas','traen la sangre del cuerpo a la aurícula derecha.'],ad:['Aurícula derecha','recibe sangre sin oxígeno del cuerpo.'],vd:['Ventrículo derecho','bombea la sangre hacia los pulmones.'],ai:['Aurícula izquierda','recibe sangre oxigenada de los pulmones.'],vi:['Ventrículo izquierdo','la cámara más potente: bombea sangre a todo el cuerpo.'],pd:['Pulmón derecho','tiene 3 lóbulos.'],pz:['Pulmón izquierdo','tiene 2 lóbulos y deja espacio al corazón.'],tr:['Tráquea y bronquios','conducen el aire hacia los pulmones.'],hd:['Hemisferio derecho','controla sobre todo el lado izquierdo del cuerpo.'],hi:['Hemisferio izquierdo','controla sobre todo el lado derecho; suele alojar el lenguaje.'],ce:['Cerebelo','coordina el equilibrio y el movimiento.'],tc:['Tronco encefálico','regula respiración y latidos; conecta con la médula.']};
-const SITE={corazon:[.18,.95,.1],pulmones:[0,1.05,0],cerebro:[0,2.1,0]};
-const sph=()=>new THREE.SphereGeometry(1,24,18);
-function mesh(g,c,k,p,s,op){const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:op||.9,roughness:.5}));m.position.set(p[0],p[1],p[2]);if(s)m.scale.set(s[0],s[1],s[2]);m.userData={k,o:op||.9};return m}
-function tube(pts,r,c,k){const m=mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]))),24,r,10),c,k,[0,0,0]);return m}
+const OL=[['corazon','the heart','Corazón',1],['pulmones','the lungs','Pulmones',1],['cerebro','the brain','Cerebro',1],['mama','the breast','Mama',1],['higado','the liver and upper abdomen','Hígado',1],['rinones','the kidneys','Riñones',1],['columna','the spine','Columna',1],['rodilla','the knee','Rodilla',0],['dientes','the teeth and jaw','Dientes y mandíbula',0],['pelvis','the pelvis','Pelvis',0],['celulas','blood cells under a microscope','Células (microscopía)',0],['otro','an unrelated non-medical picture','No parece imagen médica',0]];
+const ORGN=Object.fromEntries(OL.map(o=>[o[0],o[2]])),NOPL=['celulas','otro'];
+const PLA=[['axial','an axial slice'],['sagital','a sagittal slice'],['coronal','a coronal slice'],['proy','a plain projection X-ray']];
+const PLNAME={axial:'Axial',sagital:'Sagital',coronal:'Coronal',proy:'Radiografía',na:'—'};
+const INFO={ao:['Aorta','arteria principal: lleva sangre oxigenada del corazón a todo el cuerpo.'],ap:['Arteria pulmonar','lleva sangre pobre en oxígeno del ventrículo derecho a los pulmones.'],vc:['Vena cava','trae la sangre del cuerpo hacia la aurícula derecha.'],ad:['Aurícula derecha','recibe sangre sin oxígeno del cuerpo.'],vd:['Ventrículo derecho','bombea la sangre hacia los pulmones.'],ai:['Aurícula izquierda','recibe sangre oxigenada de los pulmones.'],vi:['Ventrículo izquierdo','la cámara más potente: bombea sangre a todo el cuerpo.'],
+pds:['Lóbulo sup. derecho','uno de los 3 lóbulos del pulmón derecho.'],pdm:['Lóbulo medio derecho','solo el pulmón derecho lo tiene.'],pdi:['Lóbulo inf. derecho','el más grande del pulmón derecho.'],pzs:['Lóbulo sup. izquierdo','el pulmón izquierdo tiene 2 lóbulos y deja espacio al corazón.'],pzi:['Lóbulo inf. izquierdo','zona de intercambio de gases en la base del pulmón.'],tr:['Tráquea y bronquios','conducen el aire hacia los pulmones.'],
+hd:['Hemisferio derecho','controla sobre todo el lado izquierdo del cuerpo.'],hi:['Hemisferio izquierdo','controla sobre todo el lado derecho; suele alojar el lenguaje.'],ce:['Cerebelo','coordina el equilibrio y el movimiento.'],tc:['Tronco encefálico','regula respiración y latidos; conecta con la médula.'],cc:['Cuerpo calloso','banda de fibras que comunica los dos hemisferios.'],
+gr:['Tejido graso','da volumen a la mama; se ve oscuro en mamografía.'],gl:['Glándula mamaria','lobulillos que producen leche; se ve más denso.'],co:['Conductos','llevan la leche de los lobulillos al pezón.'],pe:['Pezón y areola','salida de los conductos.'],pm:['Músculo pectoral','músculo detrás de la mama, sobre las costillas.'],
+ld:['Lóbulo derecho','el más grande del hígado.'],li:['Lóbulo izquierdo','más pequeño, junto al estómago.'],vb:['Vesícula biliar','almacena la bilis.'],vp:['Vena porta','lleva sangre con nutrientes del intestino al hígado.'],
+rd:['Riñón derecho','filtra la sangre y produce orina.'],ri:['Riñón izquierdo','filtra la sangre y produce orina.'],ur:['Uréteres','llevan la orina a la vejiga.'],
+cv:['Vértebras cervicales','7 vértebras del cuello.'],th:['Vértebras torácicas','12 vértebras que sostienen las costillas.'],lu:['Vértebras lumbares','5 vértebras grandes que soportan el peso.'],sa:['Sacro','une la columna con la pelvis.'],me:['Médula espinal','cordón nervioso dentro del canal vertebral.']};
+const SITE={corazon:[.2,1,.15],pulmones:[0,1.05,0],cerebro:[0,2.05,0],mama:[-.28,.95,.38],higado:[-.25,.55,.1],rinones:[0,.35,-.15],columna:[0,.8,-.3],rodilla:[.28,-1.15,0],dientes:[0,1.95,.3],pelvis:[0,-.05,0]},SC={columna:.6,higado:.9};
+const sph=()=>new THREE.SphereGeometry(1,32,24);
+function mesh(g,c,k,p,s,op){const m=new THREE.Mesh(g,new THREE.MeshStandardMaterial({color:c,transparent:true,opacity:op||.9,roughness:.5}));m.position.set(p[0],p[1],p[2]);if(s)m.scale.set(s[0],s[1],s[2]);g.computeBoundingBox();const ce=new THREE.Vector3();g.boundingBox.getCenter(ce);m.userData={k,o:op||.9,c:ce.add(m.position)};return m}
+function blob(c,k,p,s,op,bump){const g=new THREE.SphereGeometry(1,40,30);if(bump){const a=g.attributes.position;for(let i=0;i<a.count;i++){const x=a.getX(i),y=a.getY(i),z=a.getZ(i),d=1+bump*Math.sin(x*8+1)*Math.sin(y*7+2)*Math.sin(z*8+3);a.setXYZ(i,x*d,y*d,z*d)}g.computeVertexNormals()}return mesh(g,c,k,p,s,op)}
+function tube(pts,r,c,k,op){return mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map(p=>new THREE.Vector3(p[0],p[1],p[2]))),24,r,10),c,k,[0,0,0],null,op)}
 const BUILD={
  corazon:g=>g.add(mesh(sph(),0x3b6fd4,'ad',[-.8,.5,0],[.5,.5,.5]),mesh(sph(),0xc43a3a,'ai',[.5,.65,-.3],[.45,.4,.45]),mesh(sph(),0x2f5fc0,'vd',[-.35,-.3,.3],[.65,.9,.6]),mesh(sph(),0xa82828,'vi',[.3,-.45,0],[.7,1.05,.65]),tube([[.25,.5,0],[.2,1.3,0],[-.1,1.8,0],[-.7,1.5,0]],.22,0xd04848,'ao'),tube([[-.35,.4,.35],[-.4,1,.5],[-.9,1.3,.4]],.2,0x5a7fd8,'ap'),tube([[-.95,.9,0],[-.95,1.6,0]],.14,0x3b6fd4,'vc'),tube([[-.8,0,0],[-.8,-1.2,0]],.14,0x3b6fd4,'vc')),
- pulmones:g=>g.add(mesh(sph(),0xe8a0a8,'pd',[-1.1,0,0],[.75,1.4,.6],.75),mesh(sph(),0xe8a0a8,'pz',[1.1,0,0],[.65,1.4,.6],.75),tube([[0,1.7,0],[0,.5,0]],.16,0xcfd8dc,'tr'),tube([[0,.5,0],[-.6,-.1,0]],.1,0xcfd8dc,'tr'),tube([[0,.5,0],[.6,-.1,0]],.1,0xcfd8dc,'tr')),
- cerebro:g=>g.add(mesh(sph(),0xe0a0b8,'hd',[-.5,.2,0],[.85,.8,1.1]),mesh(sph(),0xe6b0c4,'hi',[.5,.2,0],[.85,.8,1.1]),mesh(sph(),0xc47c98,'ce',[0,-.55,-.8],[.8,.45,.5]),tube([[0,-.3,0],[0,-1.3,.05]],.22,0xd9c58a,'tc'))};
+ pulmones:g=>g.add(mesh(sph(),0xe8a0a8,'pds',[-1.15,.5,0],[.7,.75,.55],.8),mesh(sph(),0xd98c9a,'pdm',[-.95,-.15,.3],[.6,.4,.42],.8),mesh(sph(),0xe39aa6,'pdi',[-1.2,-.75,-.05],[.75,.7,.6],.8),mesh(sph(),0xefb0b0,'pzs',[1.1,.5,0],[.62,.78,.55],.8),mesh(sph(),0xe08f9c,'pzi',[1.15,-.7,-.05],[.7,.75,.6],.8),tube([[0,1.8,0],[0,.5,0]],.15,0xcfd8dc,'tr'),tube([[0,.5,0],[-.65,-.1,0]],.1,0xcfd8dc,'tr'),tube([[0,.5,0],[.65,-.1,0]],.1,0xcfd8dc,'tr')),
+ cerebro:g=>g.add(blob(0xe0a0b8,'hd',[-.5,.2,0],[.85,.8,1.1],1,.07),blob(0xe6b0c4,'hi',[.5,.2,0],[.85,.8,1.1],1,.07),blob(0xc47c98,'ce',[0,-.55,-.8],[.8,.45,.5],1,.06),tube([[0,-.3,0],[0,-1.3,.05]],.22,0xd9c58a,'tc'),tube([[-.5,.3,0],[0,.6,0],[.5,.3,0]],.08,0xf2efe6,'cc')),
+ mama:g=>{g.add(blob(0xf2d6a2,'gr',[0,0,0],[1.3,1.2,.9],.5),blob(0xe58a6e,'gl',[0,0,-.1],[.7,.65,.45],.9,.12),blob(0x9c3b3b,'pm',[0,0,-.95],[1.7,1.5,.3],.9),blob(0xc97d62,'pe',[0,-.05,.9],[.3,.3,.06],1),blob(0xb5654a,'pe',[0,-.05,.97],[.12,.12,.1],1));
+  for(let i=0;i<7;i++){const a=i/7*Math.PI*2;g.add(tube([[0,-.05,.88],[Math.cos(a)*.25,Math.sin(a)*.22-.05,.4],[Math.cos(a)*.5,Math.sin(a)*.45-.05,-.05]],.03,0xf2c14e,'co',1))}},
+ higado:g=>g.add(blob(0x8b3a2f,'ld',[-.5,0,0],[1.2,.75,.7],.92,.03),blob(0x9b4636,'li',[.85,.1,.1],[.7,.5,.5],.92,.03),blob(0x4f8a3c,'vb',[-.2,-.65,.35],[.22,.35,.2],1),tube([[-.1,-.1,.1],[.3,.3,.2]],.09,0x7f5bc4,'vp')),
+ rinones:g=>g.add(blob(0x8f2f2f,'rd',[-.9,0,0],[.45,.8,.35],.95),blob(0x8f2f2f,'ri',[.9,0,0],[.45,.8,.35],.95),tube([[-.65,-.2,0],[-.5,-1.3,.1]],.05,0xe6c34a,'ur'),tube([[.65,-.2,0],[.5,-1.3,.1]],.05,0xe6c34a,'ur'),tube([[.15,1.4,0],[.15,-1.4,0]],.12,0xd04848,'ao'),tube([[-.2,1.4,0],[-.2,-1.4,0]],.14,0x3b6fd4,'vc')),
+ columna:g=>{const C={cv:0x6fa8dc,th:0x93c47d,lu:0xf6b26b},zf=i=>.18*Math.sin(i/24*Math.PI*2.2);for(let i=0;i<24;i++){const k=i<7?'cv':i<19?'th':'lu';g.add(mesh(new THREE.CylinderGeometry(.2+i*.008,.22+i*.008,.13,18),C[k],k,[0,2.1-i*.18,zf(i)],null,.95))}
+  g.add(mesh(sph(),0xc27ba0,'sa',[0,-2.35,-.05],[.35,.45,.2]),tube([0,4,8,12,16,20,23].map(i=>[0,2.1-i*.18,zf(i)-.17]),.05,0xffe599,'me'))}};
 const FC=typeof THREE==='undefined'?null:new THREE.CatmullRomCurve3([[-.8,.5,0],[-.35,-.3,.3],[-.5,1,.45],[-.9,1.3,.4],[0,1.7,.2],[.5,.65,-.3],[.3,-.45,0],[.2,1.2,0],[-.1,1.8,0],[-.95,1.4,-.1]].map(p=>new THREE.Vector3(p[0],p[1],p[2])),true);
-function buildBody(g){const M=new THREE.MeshStandardMaterial({color:0x8fb3c4,transparent:true,opacity:.3,roughness:.6}),add=(geo,p,r)=>{const m=new THREE.Mesh(geo,M);m.position.set(p[0],p[1],p[2]);if(r)m.rotation.z=r;g.add(m)};
- add(new THREE.SphereGeometry(.45,20,16),[0,2.05,0]);add(new THREE.CylinderGeometry(.18,.2,.3,12),[0,1.65,0]);add(new THREE.CylinderGeometry(.62,.5,1.7,20),[0,.75,0]);add(new THREE.CylinderGeometry(.14,.12,1.5,12),[-.85,.8,0],.12);add(new THREE.CylinderGeometry(.14,.12,1.5,12),[.85,.8,0],-.12);add(new THREE.CylinderGeometry(.22,.16,2,12),[-.3,-1.1,0]);add(new THREE.CylinderGeometry(.22,.16,2,12),[.3,-1.1,0])}
+function buildBody(g){const M=new THREE.MeshStandardMaterial({color:0x9bbccc,transparent:true,opacity:.3,roughness:.5,depthWrite:false}),add=(geo,p,r,s)=>{const m=new THREE.Mesh(geo,M);m.position.set(p[0],p[1],p[2]);if(r)m.rotation.z=r;if(s)m.scale.set(s[0],s[1],s[2]);g.add(m)};
+ add(new THREE.SphereGeometry(.42,28,20),[0,2.05,0],0,[1,1.15,.95]);add(new THREE.CylinderGeometry(.17,.2,.3,14),[0,1.65,0]);
+ add(new THREE.LatheGeometry([[.001,-.2],[.48,-.15],[.5,.1],[.44,.55],[.5,.95],[.64,1.3],[.62,1.5],[.3,1.64],[.001,1.66]].map(p=>new THREE.Vector2(p[0],p[1])),32),[0,0,0],0,[1,1,.62]);
+ [-1,1].forEach(s=>{add(new THREE.CylinderGeometry(.13,.1,1.5,14),[s*.86,.8,0],-s*.1);add(new THREE.SphereGeometry(.15,14,10),[s*.74,1.5,0]);add(new THREE.CylinderGeometry(.24,.14,2,14),[s*.27,-1.2,0]);add(new THREE.SphereGeometry(.15,14,10),[s*.27,-.2,0])})}
 function stage(cv,ly){const r=new THREE.WebGLRenderer({canvas:cv,antialias:true,alpha:true}),s=new THREE.Scene(),cam=new THREE.PerspectiveCamera(40,cv.width/cv.height,.1,100),root=new THREE.Group();
  s.add(root,new THREE.AmbientLight(0xffffff,.8));const l=new THREE.DirectionalLight(0xffffff,.8);l.position.set(3,4,5);s.add(l);
  const st={r,s,cam,root,cv,rx:.1,ry:0,zoom:6,ly:ly||0,auto:true,d:null,moved:false};cam.position.set(0,st.ly,6);
  cv.onpointerdown=e=>{st.d=[e.clientX,e.clientY];st.moved=false;st.auto=false;cv.setPointerCapture(e.pointerId)};
  cv.onpointermove=e=>{if(!st.d)return;const dx=e.clientX-st.d[0],dy=e.clientY-st.d[1];if(Math.abs(dx)+Math.abs(dy)>3)st.moved=true;st.ry+=dx*.01;st.rx=Math.max(-1.2,Math.min(1.2,st.rx+dy*.01));st.d=[e.clientX,e.clientY]};cv.onpointerup=()=>{st.d=null};
  cv.onwheel=e=>{e.preventDefault();st.zoom=Math.max(1.8,Math.min(9,st.zoom+e.deltaY*.005))};return st}
+function placeLabels(){const L=$('#lbls');if(!$('#showL').checked){L.style.display='none';return}L.style.display='block';const w=SO.cv.clientWidth,h=SO.cv.clientHeight;
+ LB.forEach(x=>{const v=x[1].userData.c.clone();SO.root.localToWorld(v);v.project(SO.cam);x[0].style.left=((v.x*.5+.5)*w)+'px';x[0].style.top=((-v.y*.5+.5)*h)+'px'})}
 function loop(){requestAnimationFrame(loop);if($('#viz').hidden)return;
  [SB,SO].forEach(st=>{if(st.auto&&!RM)st.ry+=.006;st.root.rotation.set(st.rx,st.ry,0);st.cam.position.z+=(st.zoom-st.cam.position.z)*.08;st.cam.lookAt(0,st.ly,0);st.r.render(st.s,st.cam)});
- if(MK)MK.scale.setScalar(1+.25*Math.sin(Date.now()/250));
+ if(MK)MK.scale.setScalar(1+.25*Math.sin(Date.now()/250));placeLabels();
  if(ENTER&&FL.length){FT+=.004;FL.forEach((m,i)=>{const u=(FT+i/FL.length)%1;m.visible=true;m.position.copy(FC.getPoint(u));m.material.color.set(u<.5?0x3b6fd4:0xd04848)})}else FL.forEach(m=>{m.visible=false})}
+function applyOp(){SO.root.children.forEach(m=>{const k=m.userData.k;if(k)m.material.opacity=HL?(k===HL?1:.1):(ENTER?.22:m.userData.o)})}
+function pick(k){HL=HL===k?null:k;applyOp();document.querySelectorAll('#legend button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.k===HL));$('#partInfo').textContent=HL?INFO[k][0]+': '+INFO[k][1]:'Toca una parte del órgano para ver qué es.'}
 function initStages(){if(SO)return;
  SB=stage($('#cvBody'),.4);buildBody(SB.root);SB.zoom=8;SB.cam.position.z=8;MK=new THREE.Mesh(new THREE.SphereGeometry(.16,16,12),new THREE.MeshBasicMaterial({color:0xffd23f}));SB.root.add(MK);
+ SL=new THREE.Mesh(new THREE.PlaneGeometry(1.9,1.9),new THREE.MeshBasicMaterial({transparent:true,opacity:.88,side:THREE.DoubleSide}));SB.root.add(SL);
  SO=stage($('#cvOrg'));
- SO.cv.onclick=e=>{if(SO.moved)return;const b=SO.cv.getBoundingClientRect(),rc=new THREE.Raycaster();rc.setFromCamera(new THREE.Vector2((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1),SO.cam);const h=rc.intersectObjects(SO.root.children.filter(m=>m.userData.k))[0];if(h){const i=INFO[h.object.userData.k];$('#partInfo').textContent=i[0]+': '+i[1]}};
+ SO.cv.onclick=e=>{if(SO.moved)return;const b=SO.cv.getBoundingClientRect(),rc=new THREE.Raycaster();rc.setFromCamera(new THREE.Vector2((e.clientX-b.left)/b.width*2-1,-((e.clientY-b.top)/b.height)*2+1),SO.cam);const h=rc.intersectObjects(SO.root.children.filter(m=>m.userData.k))[0];if(h)pick(h.object.userData.k)};
  loop()}
-function setOrgan(k){SHOWN=k;ENTER=false;SO.zoom=6;const r=SO.root;while(r.children.length)r.remove(r.children[0]);BUILD[k](r);
- $('#orgName').textContent=ORGN[k];$('#enter').textContent='Entrar al órgano';$('#partInfo').textContent='Toca una parte del órgano para ver qué es.';
- const p=SITE[k];MK.position.set(p[0],p[1],p[2]+.55);
- FL=k==='corazon'?[...Array(14)].map(()=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.07,8,6),new THREE.MeshBasicMaterial({color:0x3b6fd4}));m.visible=false;r.add(m);return m}):[]}
-$('#enter').onclick=()=>{if(!SO)return;ENTER=!ENTER;SO.zoom=ENTER?2.4:6;$('#enter').textContent=ENTER?'Salir del órgano':'Entrar al órgano';SO.root.children.forEach(m=>{if(m.userData.k)m.material.opacity=ENTER?.22:m.userData.o})};
+function setOrgan(k){SHOWN=k;ENTER=false;HL=null;SO.zoom=6;const r=SO.root;while(r.children.length)r.remove(r.children[0]);FL=[];LB=[];$('#lbls').innerHTML='';const lg=$('#legend');lg.innerHTML='';
+ $('#orgName').textContent=ORGN[k]+(BUILD[k]?'':' (sin modelo 3D)');$('#enter').textContent='Entrar al órgano';$('#partInfo').textContent=BUILD[k]?'Toca una parte del órgano o elige una de la leyenda.':'Todavía no tengo un modelo 3D de esta región.';
+ const p=SITE[k];MK.visible=SL.visible=!!p;if(p)MK.position.set(p[0],p[1],p[2]+.55);
+ if(!BUILD[k])return;BUILD[k](r);r.scale.setScalar(SC[k]||1);
+ const seen={};r.children.forEach(m=>{const kk=m.userData.k;if(!kk||seen[kk])return;seen[kk]=1;
+  const b=document.createElement('button');b.type='button';b.dataset.k=kk;b.setAttribute('aria-pressed','false');b.innerHTML=`<i style="background:#${m.material.color.getHexString()}"></i>${INFO[kk][0]}`;b.onclick=()=>pick(kk);lg.appendChild(b);
+  const el=document.createElement('span');el.className='lbl';el.textContent=INFO[kk][0];$('#lbls').appendChild(el);LB.push([el,m])});
+ if(k==='corazon')FL=[...Array(14)].map(()=>{const m=new THREE.Mesh(new THREE.SphereGeometry(.07,8,6),new THREE.MeshBasicMaterial({color:0x3b6fd4}));m.visible=false;r.add(m);return m})}
+function setSlice(){const p=SITE[VZ.organ];if(!p||!SL)return;SL.position.set(p[0],p[1],p[2]);SL.rotation.set(0,0,0);if(VZ.plane==='sagital')SL.rotation.y=Math.PI/2;else if(VZ.plane==='axial')SL.rotation.x=-Math.PI/2;
+ if(cur.src&&SLsrc!==cur.src){SLsrc=cur.src;new THREE.TextureLoader().load(cur.src,tx=>{SL.material.map=tx;SL.material.needsUpdate=true})}}
+$('#enter').onclick=()=>{if(!SO)return;ENTER=!ENTER;SO.zoom=ENTER?2.4:6;$('#enter').textContent=ENTER?'Salir del órgano':'Entrar al órgano';applyOp()};
 function updateViz(){if(!VZ)return;$('#viz').hidden=false;
  if(typeof THREE==='undefined'){$('#vnote').textContent='No se pudo cargar la librería 3D (three.js). Revisa tu conexión.'}
- else{try{initStages();if(VZ.organ!==SHOWN)setOrgan(VZ.organ)}catch(e){$('#vnote').textContent='Tu navegador no pudo iniciar WebGL (3D).'}}
+ else{try{initStages();if(VZ.organ!==SHOWN)setOrgan(VZ.organ);setSlice()}catch(e){$('#vnote').textContent='Tu navegador no pudo iniciar WebGL (3D).'}}
  const bar=(n,s)=>`<div class="bar"><span>${esc(n)}</span><i style="width:${Math.round(s*100)}%"></i><em>${Math.round(s*100)} %</em></div>`;
- $('#bars').innerHTML='<b>Región</b>'+VZ.regs.map(r=>bar(r[0],r[1])).join('')+'<b>Órgano</b>'+VZ.orgs.map(r=>bar(ORGN[r[0]],r[1])).join('')+'<b>Tipo de corte</b>'+VZ.planes.map(r=>bar(PLNAME[r[0]],r[1])).join('');
+ $('#bars').innerHTML='<b>Órgano</b>'+VZ.orgs.slice(0,4).map(r=>bar(ORGN[r[0]],r[1])).join('')+'<b>Tipo de corte</b>'+VZ.planes.map(r=>bar(PLNAME[r[0]],r[1])).join('');
  document.querySelectorAll('#osel button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.o===VZ.organ));
  document.querySelectorAll('#psel button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.p===VZ.plane))}
-document.querySelectorAll('#osel button').forEach(b=>b.onclick=()=>{if(!VZ)return;VZ.organ=b.dataset.o;updateViz();$('#vnote').textContent='Órgano elegido por ti.'});
-document.querySelectorAll('#psel button').forEach(b=>b.onclick=()=>{if(!VZ)return;VZ.plane=b.dataset.p;updateViz();$('#vnote').textContent='Corte elegido por ti.'});
+function derive(){const tot=Object.values(JJ).reduce((s,o)=>s+Object.values(o).reduce((a,b)=>a+b,0),0)||1;
+ VZ.orgs=Object.entries(JJ).map(([k,o])=>[k,Object.values(o).reduce((a,b)=>a+b,0)/tot]).sort((a,b)=>b[1]-a[1]);if(!VZ.lockO)VZ.organ=VZ.orgs[0][0];
+ const o=JJ[VZ.organ]||{},s=Object.values(o).reduce((a,b)=>a+b,0)||1;VZ.planes=PLA.filter(p=>o[p[0]]!=null).map(p=>[p[0],o[p[0]]/s]).sort((a,b)=>b[1]-a[1]);
+ if(!VZ.lockP)VZ.plane=VZ.iop||(VZ.planes[0]?VZ.planes[0][0]:'na')}
+OL.filter(o=>o[3]).forEach(o=>{const b=document.createElement('button');b.className='btn';b.type='button';b.dataset.o=o[0];b.textContent=o[2];b.onclick=()=>{if(!VZ||!JJ)return;VZ.organ=o[0];VZ.lockO=true;derive();updateViz();$('#vnote').textContent='Órgano elegido por ti: se conserva al cambiar de corte.'};$('#osel').appendChild(b)});
+document.querySelectorAll('#psel button').forEach(b=>b.onclick=()=>{if(!VZ)return;VZ.plane=b.dataset.p;VZ.lockP=true;updateViz();$('#vnote').textContent='Corte elegido por ti: se conserva al cambiar de corte.'});
+function planeFromIOP(s){const v=(s||'').split('\\').map(Number);if(v.length!==6||v.some(isNaN))return null;const n=[v[1]*v[5]-v[2]*v[4],v[2]*v[3]-v[0]*v[5],v[0]*v[4]-v[1]*v[3]].map(Math.abs),m=n.indexOf(Math.max(...n));return['sagital','coronal','axial'][m]}
+function prior(){const t=((cur.info.part||'')+' '+(cur.info.desc||'')+' '+cur.name).toLowerCase(),P={};
+ [[/brain|head|cerebr|cranio|skull|cabeza/,['cerebro']],[/chest|thora|torax|tórax|cardi|heart|lung|pulm/,['corazon','pulmones']],[/breast|mama|mamm/,['mama']],[/liver|hepat|abdom|higad/,['higado']],[/kidney|renal|rinon|riñon/,['rinones']],[/spine|lumbar|cervical|columna|vertebr/,['columna']],[/knee|rodilla/,['rodilla']],[/dental|teeth|dient/,['dientes']],[/pelvi/,['pelvis']]].forEach(x=>{if(x[0].test(t))x[1].forEach(k=>{P[k]=3})});return P}
+const modWord=m=>({MR:'MRI',CT:'CT',CR:'X-ray',DX:'X-ray',IO:'X-ray',US:'ultrasound',SM:'microscope'}[m]||'medical');
 let clf=null;
-const REG={'the brain':'cerebro','the chest':'tórax','the abdomen':'abdomen','the spine':'columna','the knee':'rodilla','teeth':'dientes (dental)','the pelvis':'pelvis','blood cells under a microscope':'células sanguíneas (microscopía)'};
-const PLN={'an axial cross-section scan':'axial','a sagittal side-view scan':'sagital','a coronal front-view scan':'coronal','a plain X-ray projection radiograph':'radiografía (proyección, sin plano de corte)'};
 async function getClf(cb){if(clf)return clf;const m=await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.5.2');
  clf=await m.pipeline('zero-shot-image-classification','Xenova/clip-vit-base-patch32',{progress_callback:cb});return clf}
 async function analyze(){const out=$('#ia');
@@ -249,13 +288,12 @@ async function analyze(){const out=$('#ia');
  out.textContent='Cargando el modelo de IA en tu navegador…';
  try{const c=await getClf(p=>{if(p.status==='progress'&&p.progress!=null)out.textContent='Descargando modelo de IA… '+Math.round(p.progress)+' % (solo la primera vez)'});
   out.textContent='Analizando la imagen…';
-  const R=await c(cur.src,Object.keys(REG).map(k=>'a medical image of '+k)),P=await c(cur.src,Object.keys(PLN).map(k=>'a medical image, '+k));
-  const rk=R.sort((a,b)=>b.score-a.score),pk=P.sort((a,b)=>b.score-a.score),nm=(r,M,pre)=>M[r.label.replace(pre,'')],pc=r=>Math.round(r.score*100)+' %';
-  const key=k=>k.split(' ')[0],pn=r=>nm(r,PLN,'a medical image, '),pp=r=>pn(r).startsWith('rad')?'proy':pn(r);
-  VZ={reg:key(nm(rk[0],REG,'a medical image of ')),regs:rk.slice(0,3).map(r=>[key(nm(r,REG,'a medical image of ')),r.score]),planes:pk.map(r=>[pp(r),r.score]),plane:pp(pk[0])};
-  const OR=(await c(cur.src,Object.keys(ORGL).map(k=>'a medical scan showing '+k))).sort((x,y)=>y.score-x.score),allow=VZ.reg==='cerebro'?['cerebro']:VZ.reg==='tórax'?['corazon','pulmones']:['corazon','pulmones','cerebro'];
-  VZ.orgs=OR.map(r=>[ORGL[r.label.replace('a medical scan showing ','')],r.score]).filter(o=>allow.includes(o[0]));VZ.organ=VZ.orgs[0][0];updateViz();
-  out.innerHTML=`La IA estima: región <b>${esc(VZ.reg)}</b>, órgano <b>${ORGN[VZ.organ].toLowerCase()}</b>, ${VZ.plane==='proy'?'radiografía (proyección)':'corte <b>'+VZ.plane+'</b>'}. Explóralo en 3D aquí abajo.\n${esc(sh)}\nSi el tipo de corte no coincide con lo que sabes del estudio, corrígelo con los botones: esta IA genérica se equivoca más con el plano y con el órgano que con la región.`}
+  const m=modWord(cur.mod),labs=[],map={};
+  OL.forEach(([k,en])=>(NOPL.includes(k)?['na']:PLA.map(x=>x[0])).forEach(p=>{const pl=PLA.find(x=>x[0]===p),L=p==='na'?[`a picture of ${en}`,`an image of ${en}`]:p==='proy'?[`a plain X-ray radiograph of ${en}`,`a radiograph projection image of ${en}`]:[`a ${m} image, ${pl[1].replace('a ','')} view of ${en}`,`a grayscale radiology ${pl[1].replace('a ','')} of ${en}`];L.forEach(l=>{labs.push(l);map[l]=[k,p]})}));
+  const R=await c(cur.src,labs),pr=prior();JJ={};R.forEach(r=>{const x=map[r.label];if(!x)return;(JJ[x[0]]=JJ[x[0]]||{})[x[1]]=((JJ[x[0]][x[1]])||0)+r.score*(pr[x[0]]||1)});
+  const L0=VZ||{};VZ={orgs:[],planes:[],organ:L0.lockO?L0.organ:null,plane:L0.lockP?L0.plane:null,lockO:!!L0.lockO,lockP:!!L0.lockP,iop:planeFromIOP(cur.info.iop)};derive();updateViz();
+  const top=VZ.orgs[0],low=top[1]<.4;
+  out.innerHTML=`Órgano más probable: <b>${esc(ORGN[top[0]])}</b> (${Math.round(top[1]*100)} %)${low?' — confianza baja, elige el órgano con los botones.':'.'}\n${VZ.iop?'Corte leído de los metadatos DICOM: <b>'+PLNAME[VZ.iop]+'</b> (fiable).':'Corte estimado por IA: <b>'+PLNAME[VZ.plane]+'</b> (menos fiable que el órgano; corrígelo si no coincide).'}${Object.keys(pr).length?'\nSe usaron también pistas del nombre del archivo y los metadatos.':''}\n${esc(sh)}`}
  catch(e){out.textContent=sh+'\n\nNo se pudo cargar el modelo de IA. Necesita conexión a internet y abrir la página desde tu propio hosting (por ejemplo GitHub Pages); en el visor de claude.ai está bloqueado.'}}
 $('#ana').onclick=analyze;
 if(SAMPLES.length)show(SAMPLES[0]);
